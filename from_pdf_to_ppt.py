@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 from tkinter import Tk, filedialog
 
-import pdfplumber
+import pdfplumber#PDFのテキスト層や文字ごとの位置情報を抽出する
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
@@ -23,12 +23,12 @@ from pptx.oxml.ns import qn
 # ---------- 設定（必要に応じ変更） ----------
 DEFAULT_FONT_NAME = "Meiryo"      # 環境に合わせて変更
 DEFAULT_FONT_COLOR = (0, 0, 0)    # RGB
-SLIDE_WIDTH_IN = 10.0             # 出力スライド幅（inch）
-SLIDE_HEIGHT_IN = 7.5             # 出力スライド高さ（inch）
+SLIDE_WIDTH = 10.0             # 出力スライド幅（inch）
+SLIDE_HEIGHT = 7.5             # 出力スライド高さ（inch）
 LINE_TOP_TOLERANCE_PT = 3.0       # 同一行判定の垂直許容（pt）
 CHAR_GAP_FACTOR = 0.5             # 文字間ギャップ判定（size * factor）
-MIN_BOX_WIDTH_IN = 0.08           # 最小テキストボックス幅（inch）
-MIN_BOX_HEIGHT_IN = 0.08          # 最小テキストボックス高さ（inch）
+MIN_BOX_WIDTH = 0.08           # 最小テキストボックス幅（inch）
+MIN_BOX_HEIGHT = 0.08          # 最小テキストボックス高さ（inch）
 # ------------------------------------------------
 
 def ask_pdf_path():
@@ -93,8 +93,10 @@ def build_text_from_line(chars_in_line):
     avg_font = sum(sizes_nonzero) / len(sizes_nonzero) if sizes_nonzero else None
     return text, x0, x1, bottom, avg_font
 
-def pdf_page_to_slide(prs, page, slide_w_in=SLIDE_WIDTH_IN, slide_h_in=SLIDE_HEIGHT_IN):
+def pdf_page_to_slide(prs, page, slide_w=SLIDE_WIDTH, slide_h=SLIDE_HEIGHT):
     """Convert one pdfplumber page to one slide with positioned textboxes."""
+    
+    # PDFのページサイズを取得
     pdf_w_pt = page.width
     pdf_h_pt = page.height
 
@@ -113,7 +115,7 @@ def pdf_page_to_slide(prs, page, slide_w_in=SLIDE_WIDTH_IN, slide_h_in=SLIDE_HEI
     #   font_pt_ppt = avg_font_pt * (slide_height_in_inches / (pdf_height_in_inches))
     # where pdf_height_in_inches = pdf_h_pt / 72.0
     # So scale_font = slide_h_in / (pdf_h_pt / 72.0) = slide_h_in * 72.0 / pdf_h_pt
-    font_scale = slide_h_in * 72.0 / pdf_h_pt if pdf_h_pt else 1.0
+    font_scale = slide_h * 72.0 / pdf_h_pt if pdf_h_pt else 1.0
 
     for top_pt, chars_in_line in lines:
         text, x0, x1, bottom, avg_font = build_text_from_line(chars_in_line)
@@ -121,16 +123,16 @@ def pdf_page_to_slide(prs, page, slide_w_in=SLIDE_WIDTH_IN, slide_h_in=SLIDE_HEI
             continue
 
         # compute position and size in inches
-        left_in = (x0 / pdf_w_pt) * slide_w_in if pdf_w_pt else 0
-        top_in = (top_pt / pdf_h_pt) * slide_h_in if pdf_h_pt else 0
-        width_in = ((x1 - x0) / pdf_w_pt) * slide_w_in if pdf_w_pt else MIN_BOX_WIDTH_IN
-        height_in = ((bottom - top_pt) / pdf_h_pt) * slide_h_in if pdf_h_pt else MIN_BOX_HEIGHT_IN
+        left_in = (x0 / pdf_w_pt) * slide_w if pdf_w_pt else 0
+        top_in = (top_pt / pdf_h_pt) * slide_h if pdf_h_pt else 0
+        width_in = ((x1 - x0) / pdf_w_pt) * slide_w if pdf_w_pt else MIN_BOX_WIDTH
+        height_in = ((bottom - top_pt) / pdf_h_pt) * slide_h if pdf_h_pt else MIN_BOX_HEIGHT
 
         # enforce minimum sizes
-        if width_in < MIN_BOX_WIDTH_IN:
-            width_in = MIN_BOX_WIDTH_IN
-        if height_in < MIN_BOX_HEIGHT_IN:
-            height_in = MIN_BOX_HEIGHT_IN
+        if width_in < MIN_BOX_WIDTH:
+            width_in = MIN_BOX_WIDTH
+        if height_in < MIN_BOX_HEIGHT:
+            height_in = MIN_BOX_HEIGHT
 
         # add textbox
         left = Inches(left_in)
@@ -170,29 +172,47 @@ def pdf_page_to_slide(prs, page, slide_w_in=SLIDE_WIDTH_IN, slide_h_in=SLIDE_HEI
 
     return slide
 
-def convert_pdf_to_pptx(pdf_path, out_pptx):
+def convert_pdf_to_pptx(pdf_path, output_pptx):
+    #pptxのプレゼンテーションオブジェクトを作成し、スライドサイズを設定
     prs = Presentation()
-    prs.slide_width = Inches(SLIDE_WIDTH_IN)
-    prs.slide_height = Inches(SLIDE_HEIGHT_IN)
+    prs.slide_width = Inches(SLIDE_WIDTH)
+    prs.slide_height = Inches(SLIDE_HEIGHT)
 
+    #pdfをスライドごとに処理していく
     with pdfplumber.open(pdf_path) as pdf:
         for page in pdf.pages:
-            pdf_page_to_slide(prs, page, SLIDE_WIDTH_IN, SLIDE_HEIGHT_IN)
+            pdf_page_to_slide(prs, page, SLIDE_WIDTH, SLIDE_HEIGHT)
 
-    prs.save(out_pptx)
-    print("Saved:", out_pptx)
+    #pptxファイルとして保存
+    prs.save(output_pptx)
+    #print("Saved:", output_pptx)
 
+# GUIでPDF を選択させる関数
+def ask_pdf_path_gui():
+    root = Tk()#ルートウィンドウを作成
+    try:
+        root.withdraw()#ルートウィンドウを非表示にする
+        root.update()  # プラットフォームによっては必要
+        selected_pdf = filedialog.askopenfilename(
+            title="PDFファイルを選択してください",
+            filetypes=[("PDF Files", ("*.pdf","*.PDF"))]
+        )
+    finally:
+        root.destroy()
+    return selected_pdf
+
+#入力部分
 def main():
-    if len(sys.argv) >= 2:
-        pdf_path = sys.argv[1]
-    else:
-        pdf_path = ask_pdf_path()
-    if not pdf_path:
+    selected_pdf = ask_pdf_path_gui()# GUIでPDF を選択させる
+
+    # PDF が選択されなかった場合は終了
+    if not selected_pdf:
         print("PDF が選択されませんでした")
         return
-    p = Path(pdf_path)
-    out = str(p.with_name(p.stem + "_preserved.pptx"))
-    convert_pdf_to_pptx(str(p), out)
+
+    pdf_path = Path(selected_pdf)# 入力パスを Path オブジェクトに変換
+    output_pptx = str(pdf_path.with_name(pdf_path.stem + "_edited.pptx"))#出力するファイル名
+    convert_pdf_to_pptx(str(pdf_path), output_pptx)
 
 if __name__ == "__main__":
     main()
